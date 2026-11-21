@@ -1,22 +1,31 @@
 import random
 
+
+# Probabilité qu'un gène mute
+TAUX_MUTATION = 0.05
+
+
 class Chromosome:
     def __init__(self, genes=None):
-        # 63 moves for an 8x8 board (visiting 64 squares)
+        # 63 gènes pour parcourir les 64 cases de l'échiquier
         if genes is None:
+            # Génère des gènes aléatoires entre 1 et 8
             self.genes = [random.randint(1, 8) for _ in range(63)]
         else:
             self.genes = genes
 
     def crossover(self, partner):
-        """Single-point crossover to generate two offspring."""
+        """Croisement à un point unique entre deux chromosomes."""
+        # Choisis un point de coupe aléatoire
         point = random.randint(1, 62)
+        # Chaque enfant prend une partie des gènes de chaque parent
         child1_genes = self.genes[:point] + partner.genes[point:]
         child2_genes = partner.genes[:point] + self.genes[point:]
         return Chromosome(child1_genes), Chromosome(child2_genes)
 
-    def mutation(self, mutation_rate=0.05):
-        """Mutates a gene with a given probability."""
+    def mutation(self):
+        """Chaque gène a une chance de devenir un déplacement aléatoire."""
         for i in range(len(self.genes)):
-            if random.random() < mutation_rate:
+            # Avec une probabilité de 5%, le gène est remplacé au hasard
+            if random.random() < TAUX_MUTATION:
                 self.genes[i] = random.randint(1, 8)
