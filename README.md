@@ -47,3 +47,15 @@ launched from another working directory.
 
 The status line reports `Step n / 64`. The screen can be resized; board art and
 sprite scaling use nearest-neighbor resampling to preserve crisp pixels.
+
+## Generation display
+
+The header also reports **`GEN n`** — the generation in which the genetic
+algorithm first produced the displayed 64-square tour. It is passed from
+`main.py` (`population.generation`) into `draw_solution(best_knight, generation)`
+and rendered next to the title. If no generation is supplied the label falls
+back to `GEN —`.
+
+`main.py` stops after `MAX_GENERATIONS = 5000` instead of looping forever, and
+the player accepts a partial tour (any non-empty path of at most 64 squares),
+so a run that hits the cap still opens and replays its best path.

@@ -50,10 +50,14 @@ def _ensure_knight_sprite() -> None:
 
 
 class _TourPlayer:
-    def __init__(self, root: tk.Tk, path: list[tuple[int, int]]) -> None:
-        if len(path) != 64:
-            raise ValueError(f"Expected a 64-square Knight's Tour, got {len(path)}")
+    def __init__(self, root: tk.Tk, path: list[tuple[int, int]],
+                 generation: int | None = None) -> None:
+        if not (1 <= len(path) <= 64):
+            raise ValueError(f"Expected a tour of at most 64 squares, got {len(path)}")
         self.path = [(int(row), int(col)) for row, col in path]
+        # Length of the tour actually found, so a partial run still renders.
+        self.total = len(self.path)
+        self.generation = generation
         if any(not (0 <= row < 8 and 0 <= col < 8) for row, col in self.path):
             raise ValueError("Every path position must be a (row, col) pair from 0 to 7")
 
@@ -113,8 +117,14 @@ class _TourPlayer:
             header, text="KNIGHT'S TOUR", bg=PALETTE["berry"], fg=PALETTE["light"],
             font=("TkFixedFont", 14, "bold"),
         ).pack(side="left")
+        # The generation that produced the displayed tour, as reported by main().
+        gen_text = f"GEN {self.generation}" if self.generation is not None else "GEN —"
+        tk.Label(
+            header, text=gen_text, bg=PALETTE["berry"], fg=PALETTE["pink"],
+            font=("TkFixedFont", 11, "bold"),
+        ).pack(side="left", padx=(18, 0))
         self.status = tk.Label(
-            header, text="STEP 00 / 64", bg=PALETTE["berry"], fg="white",
+            header, text=f"STEP 00 / {self.total}", bg=PALETTE["berry"], fg="white",
             font=("TkFixedFont", 11, "bold"),
         )
         self.status.pack(side="right", padx=(12, 0))
@@ -258,24 +268,24 @@ class _TourPlayer:
             center_x = offset_x + x0 + (col_f + 0.5) * cell_w
             center_y = offset_y + y0 + (row_f + 0.5) * cell_h
             self.canvas.create_image(center_x, center_y, image=self.knight_photo, anchor="center")
-        self.status.configure(text=f"STEP {self.step:02d} / 64")
+        self.status.configure(text=f"STEP {self.step:02d} / {self.total}")
         self.progress.delete("all")
         progress_w = max(1, self.progress.winfo_width())
         progress_h = max(1, self.progress.winfo_height())
         self.progress.create_rectangle(
-            0, 0, round(progress_w * self.step / 64), progress_h,
+            0, 0, round(progress_w * self.step / self.total), progress_h,
             fill=PALETTE["rose"], outline="",
         )
         self.speed_label.configure(text=f"SPEED {self.delay_ms} ms")
         self.buttons["pause"].configure(text="RESUME" if not self.running else "PAUSE")
 
     def _schedule_next(self) -> None:
-        if self.running and self.step < 64 and self.animation_id is None:
+        if self.running and self.step < self.total and self.animation_id is None:
             self.animation_id = self.root.after(self.delay_ms, self._advance)
 
     def _advance(self) -> None:
         self.animation_id = None
-        if not self.running or self.step >= 64:
+        if not self.running or self.step >= self.total:
             return
         previous = self.path[self.step - 1] if self.step else self.path[0]
         self.step += 1
@@ -291,7 +301,7 @@ class _TourPlayer:
             if frame > frame_count:
                 self.animation_frame_id = None
                 self._render()
-                if self.step >= 64:
+                if self.step >= self.total:
                     self.running = False
                     self._render()
                 else:
@@ -340,7 +350,7 @@ class _TourPlayer:
     def step_forward(self, _event: tk.Event | None = None) -> str:
         self._cancel_callbacks()
         self.running = False
-        self.step = min(64, self.step + 1)
+        self.step = min(self.total, self.step + 1)
         self._render()
         return "break"
 
@@ -364,11 +374,15 @@ class _TourPlayer:
         self.root.destroy()
 
 
-def draw_solution(best_knight) -> None:
-    """Display and animate ``best_knight.path`` in a resizable Tk window."""
+def draw_solution(best_knight, generation: int | None = None) -> None:
+    """Display and animate ``best_knight.path`` in a resizable Tk window.
+
+    ``generation`` is the generation that produced the tour; it is shown in
+    the window header so the viewer can see how long the GA took.
+    """
     if not BOARD_PATH.is_file():
         raise FileNotFoundError(f"Board background not found: {BOARD_PATH}")
     _ensure_knight_sprite()
     root = tk.Tk()
-    _TourPlayer(root, best_knight.path)
+    _TourPlayer(root, best_knight.path, generation)
     root.mainloop()

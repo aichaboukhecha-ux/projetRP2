@@ -44,31 +44,41 @@ class Knight:
 
         for i in range(63):
             original_move = self.chromosome.genes[i]
-            
-            # Check if the original move is valid
-            if self.is_valid(self.move_forward(original_move)):
-                self.position = self.move_forward(original_move)
+
+            # Try the move, then cancel it with move_backward if it lands
+            # off-board or on a square that was already visited.
+            trial_position = self.move_forward(original_move)
+            if self.is_valid(trial_position):
+                self.position = trial_position
                 self.path.append(self.position)
-            else:
-                # Repair mechanism: cycle through moves
-                found_valid = False
-                for step in range(1, 8):
-                    if cycle_forward:
-                        new_move = (original_move + step - 1) % 8 + 1
-                    else:
-                        new_move = (original_move - step - 1) % 8 + 1
-                    
-                    if self.is_valid(self.move_forward(new_move)):
-                        # Update the gene (chromosome repair)
-                        self.chromosome.genes[i] = new_move
-                        self.position = self.move_forward(new_move)
-                        self.path.append(self.position)
-                        found_valid = True
-                        break
-                
-                if not found_valid:
-                    # If no valid move is found, the path ends here
+                continue
+
+            # Cancel the illegal move: back to the square the knight stood on.
+            self.position = self.move_backward(original_move, trial_position)
+
+            # Repair mechanism: cycle through the other directions, starting
+            # from the current square. The cycle direction is chosen once for
+            # the whole chromosome and stays fixed.
+            found_valid = False
+            for step in range(1, 8):
+                if cycle_forward:
+                    new_move = (original_move + step - 1) % 8 + 1
+                else:
+                    new_move = (original_move - step - 1) % 8 + 1
+
+                candidate = self.move_forward(new_move, self.position)
+                if self.is_valid(candidate):
+                    # Update the gene (chromosome repair)
+                    self.chromosome.genes[i] = new_move
+                    self.position = candidate
+                    self.path.append(self.position)
+                    found_valid = True
                     break
+
+            if not found_valid:
+                # No legal move: the gene keeps its original value and the
+                # path ends here.
+                break
 
     def evaluate_fitness(self):
         """Fitness is the number of unique squares visited."""

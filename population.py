@@ -32,7 +32,12 @@ class Population:
     def create_new_generation(self):
         """Generates the next generation using Crossover and Mutation."""
         new_knights = []
-        
+
+        # Elitism: carry the best knight of this generation forward unchanged
+        # so progress can never be lost to random crossover/mutation.
+        elite = max(self.knights, key=lambda k: k.fitness)
+        new_knights.append(elite)
+
         while len(new_knights) < self.population_size:
             parent1, parent2 = self.tournament_selection(size=3)
             
