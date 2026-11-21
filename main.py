@@ -1,34 +1,47 @@
 from population import Population
-from interface import draw_solution
+from interface import KnightTourUI
+import time
 
 def main():
     population_size = 50
     population = Population(population_size)
     
-    print("Starting Genetic Algorithm for Knight's Tour...")
+    ui = KnightTourUI()
     
-    while True:
-        # 1. Check the validity of the current population
+    MAX_GENERATIONS = 1000 
+    
+    # --- HALL OF FAME TRACKING ---
+    all_time_best_fit = -1
+    all_time_best_knight = None
+    
+    while population.generation <= MAX_GENERATIONS:
         population.check_population()
-
-        # 2. Evaluate the current generation and get the best knight
-        maxFit, bestSolution = population.evaluate()
         
-        # Optional: Print progress every 50 generations
-        if population.generation % 50 == 0:
-            print(f"Generation {population.generation}: Best Fitness = {maxFit} / 64")
-
-        # 3. Break if optimal solution is found
-        if maxFit == 64:
-            print(f"\nSolution found in generation {population.generation}!")
+        # Get the best knight OF THIS SPECIFIC GENERATION
+        gen_best_fit, gen_best_knight = population.evaluate()
+        
+        # Check if this generation produced a new all-time champion
+        is_new_record = False
+        if gen_best_fit > all_time_best_fit:
+            all_time_best_fit = gen_best_fit
+            all_time_best_knight = gen_best_knight
+            is_new_record = True
+        
+        # 1. Update the board with the ALL-TIME BEST knight (not just this generation's)
+        ui.update_board(all_time_best_knight, population.generation, gen_best_fit, all_time_best_fit)
+        
+        # 2. Log this generation's score (with a ⭐ marker if it's a new record)
+        ui.log_generation(population.generation, gen_best_fit, is_new_record)
+        
+        time.sleep(0.02) 
+        
+        if all_time_best_fit == 64:
+            ui.header_label.config(text=f"SUCCESS! Perfect Solution Found in Generation {population.generation}!", bg="green")
             break
-
-        # 4. Generate the new population
+            
         population.create_new_generation()
 
-    # 5. Create the user interface to display the solution
-    print("Launching interface...")
-    draw_solution(bestSolution)
+    ui.root.mainloop()
 
 if __name__ == "__main__":
     main()
