@@ -26,6 +26,12 @@ a, b = Chromosome(), Chromosome()
 c1, c2 = a.crossover(b)
 check("crossover renvoie 2 chromosomes", isinstance(c1, Chromosome) and isinstance(c2, Chromosome))
 check("crossover = un seul point de coupe", len(c1.genes) == 63 and len(c2.genes) == 63)
+# crossover refuse deux parents de longueurs différentes
+try:
+    Chromosome([1] * 63).crossover(Chromosome([2] * 10))
+    check("crossover refuse 2 parents de longueurs différentes", False)
+except AssertionError:
+    check("crossover refuse 2 parents de longueurs différentes", True)
 # mutation sans argument
 d = Chromosome([1] * 63)
 d.mutation()

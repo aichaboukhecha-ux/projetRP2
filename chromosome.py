@@ -16,8 +16,11 @@ class Chromosome:
 
     def crossover(self, partner):
         """Croisement à un point unique entre deux chromosomes."""
+        # Les deux parents doivent avoir le même nombre de gènes
+        assert len(self.genes) == len(partner.genes), \
+            "crossover : les deux parents doivent avoir la même longueur"
         # Choisis un point de coupe aléatoire
-        point = random.randint(1, 62)
+        point = random.randint(1, len(self.genes) - 1)
         # Chaque enfant prend une partie des gènes de chaque parent
         child1_genes = self.genes[:point] + partner.genes[point:]
         child2_genes = partner.genes[:point] + self.genes[point:]

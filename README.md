@@ -103,13 +103,13 @@ When a tour is found, `export.py::export_solution()` writes two files next to
 ## Verification scripts
 
 ```bash
-PYTHONPATH=. python tools/_verif_spec.py        # 51 checks against the assignment
+PYTHONPATH=. python tools/_verif_spec.py        # 52 checks against the assignment
 PYTHONPATH=. python tools/_verif_nouveautes.py  # coordinates, history, export
 PYTHONPATH=. python tools/_verif_chemin.py      # solution path window
 PYTHONPATH=. python tools/_verif_ligne.py       # path line on the board
 ```
 
-106 checks in total, all passing.
+107 checks in total, all passing.
 
 All comments and docstrings in the source are written in simple French, and
 the method signatures match the assignment exactly
