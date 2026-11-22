@@ -90,20 +90,25 @@ class Knight:
     def evaluate_fitness(self):
         """Compte les cases valides jusqu'au premier déplacement invalide."""
         self.fitness = 0
-        for i in range(len(self.path)):
-            x, y = self.path[i]
+        # Cases déjà vues : un set est bien plus rapide qu'une liste
+        seen = set()
+        previous = None
+        for position in self.path:
+            x, y = position
             # Case hors de l'échiquier : on s'arrête
             if not (0 <= x < 8 and 0 <= y < 8):
                 break
             # Case déjà visitée : on s'arrête
-            if self.path[i] in self.path[:i]:
+            if position in seen:
                 break
             # Saut qui n'est pas un déplacement de cavalier : on s'arrête
-            if i > 0:
-                dx = self.path[i][0] - self.path[i - 1][0]
-                dy = self.path[i][1] - self.path[i - 1][1]
+            if previous is not None:
+                dx = position[0] - previous[0]
+                dy = position[1] - previous[1]
                 if (dx, dy) not in self.DIRECTIONS.values():
                     break
             # Case valide : on incrémente la fitness
+            seen.add(position)
+            previous = position
             self.fitness += 1
         return self.fitness

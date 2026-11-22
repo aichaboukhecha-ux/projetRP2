@@ -13,3 +13,7 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Sorties générées à chaque exécution
+solution.txt
+solution.json

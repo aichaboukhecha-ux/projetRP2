@@ -1,5 +1,6 @@
 from population import Population
 from interface import draw_solution
+from export import export_solution
 
 # Nombre maximal de générations (évite une boucle infinie)
 MAX_GENERATIONS = 5000
@@ -10,6 +11,8 @@ def main():
     population_size = 50
     # Crée la population initiale
     population = Population(population_size)
+    # Historique (génération, fitness) pour la courbe et l'export
+    history = []
 
     print("Starting Genetic Algorithm for Knight's Tour...")
 
@@ -19,6 +22,9 @@ def main():
 
         # 2. Évalue la génération et récupère le meilleur cavalier
         maxFit, bestSolution = population.evaluate()
+
+        # Enregistre la fitness de cette génération
+        history.append((population.generation, maxFit))
 
         # Affiche la progression toutes les 50 générations
         if population.generation % 50 == 0:
@@ -38,9 +44,12 @@ def main():
         # 5. Génère la génération suivante
         population.create_new_generation()
 
-    # 6. Affiche la solution sur l'interface
+    # 6. Exporte le chemin de la solution (texte + JSON)
+    export_solution(bestSolution, population.generation, history)
+
+    # 7. Affiche la solution sur l'interface
     print("Launching interface...")
-    draw_solution(bestSolution, population.generation)
+    draw_solution(bestSolution, population.generation, history)
 
 
 if __name__ == "__main__":

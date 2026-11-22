@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
+from knight import Knight
+
 
 BASE = Path(__file__).resolve().parent
 BOARD_PATH = BASE / "Pastel Pink Pixel Chessboard.png"
@@ -27,6 +29,14 @@ PALETTE = {
 # Zone jouable de l'image, exprimée en fractions
 BOARD_AREA = (197 / 1297, 132 / 1213, 1100 / 1297, 1043 / 1213)
 GRID = (0.0, 0.0, 1.0, 1.0)
+
+# Inverse de Knight.DIRECTIONS : (dx, dy) -> numéro du déplacement
+DIRECTION_NUM = {v: k for k, v in Knight.DIRECTIONS.items()}
+# Libellé français des 8 déplacements (conforme au cahier des charges)
+DIRECTION_NOMS = {
+    1: "1  haut-droite", 2: "2  droite-haut", 3: "3  droite-bas", 4: "4  bas-droite",
+    5: "5  bas-gauche", 6: "6  gauche-bas", 7: "7  gauche-haut", 8: "8  haut-gauche",
+}
 
 
 def _font_file() -> Path:
@@ -52,7 +62,8 @@ def _ensure_knight_sprite() -> None:
 
 class _TourPlayer:
     def __init__(self, root: tk.Tk, path: list[tuple[int, int]],
-                 generation: int | None = None) -> None:
+                 generation: int | None = None,
+                 history: list[tuple[int, int]] | None = None) -> None:
         # Le parcours doit contenir entre 1 et 64 cases
         if not (1 <= len(path) <= 64):
             raise ValueError(f"Expected a tour of at most 64 squares, got {len(path)}")
@@ -61,6 +72,12 @@ class _TourPlayer:
         self.total = len(self.path)
         # Génération qui a produit ce parcours
         self.generation = generation
+        # Historique (génération, fitness) pour la courbe
+        self.history = list(history) if history else []
+        # Fenêtre de l'historique (ouverte ou fermée)
+        self.history_window: tk.Toplevel | None = None
+        # Fenêtre du chemin de la solution (ouverte ou fermée)
+        self.path_window: tk.Toplevel | None = None
         # Chaque case doit être sur l'échiquier
         if any(not (0 <= row < 8 and 0 <= col < 8) for row, col in self.path):
             raise ValueError("Every path position must be a (row, col) pair from 0 to 7")
@@ -103,6 +120,10 @@ class _TourPlayer:
         self.root.bind("<Left>", self.step_backward)
         self.root.bind("<Right>", self.step_forward)
         self.root.bind("<F1>", self.toggle_grid)
+        self.root.bind("<KeyPress-h>", self.toggle_history)
+        self.root.bind("<KeyPress-H>", self.toggle_history)
+        self.root.bind("<KeyPress-p>", self.toggle_path)
+        self.root.bind("<KeyPress-P>", self.toggle_path)
         self.root.bind("<plus>", self.speed_up)
         self.root.bind("<equal>", self.speed_up)
         self.root.bind("<KP_Add>", self.speed_up)
@@ -183,6 +204,8 @@ class _TourPlayer:
             ("REPLAY", "replay", self.replay),
             ("−", "slower", self.slow_down),
             ("+", "faster", self.speed_up),
+            ("HISTO", "history", self.toggle_history),
+            ("PATH", "path", self.toggle_path),
         ):
             button = tk.Button(
                 controls, text=label, command=command,
@@ -196,7 +219,7 @@ class _TourPlayer:
 
         # Rappel des raccourcis clavier
         tk.Label(
-            self.root, text="SPACE pause  ·  ← / → step  ·  R replay  ·  + / − speed  ·  F1 grid",
+            self.root, text="SPACE pause  ·  ← / → step  ·  R replay  ·  + / − speed  ·  F1 grid  ·  H historique  ·  P chemin",
             bg=PALETTE["frame"], fg=PALETTE["berry"], font=("TkFixedFont", 8),
         ).pack(pady=(7, 10))
 
@@ -265,10 +288,13 @@ class _TourPlayer:
         # Taille de la zone d'affichage
         canvas_w = max(1, self.canvas.winfo_width())
         canvas_h = max(1, self.canvas.winfo_height())
+        # Marge réservée aux coordonnées 1-8 autour du plateau (Figure 2)
+        margin = 34
         # Ajuste le plateau pour qu'il reste entier
-        scale = min(canvas_w / self.board.width, canvas_h / self.board.height)
-        width = max(1, int(self.board.width * scale))
-        height = max(1, int(self.board.height * scale))
+        scale = min((canvas_w - 2 * margin) / self.board.width,
+                    (canvas_h - 2 * margin) / self.board.height)
+        width = max(1, int(self.board.width * max(0.05, scale)))
+        height = max(1, int(self.board.height * max(0.05, scale)))
         # Centre le plateau dans la fenêtre
         offset_x = (canvas_w - width) // 2
         offset_y = (canvas_h - height) // 2
@@ -311,6 +337,9 @@ class _TourPlayer:
             center_y = offset_y + y0 + (row_f + 0.5) * cell_h
             self.canvas.create_image(center_x, center_y, image=self.knight_photo, anchor="center")
 
+        # Dessine les coordonnées 1-8 autour du plateau (Figure 2)
+        self._draw_coordinates(offset_x, offset_y, x0, y0, x1, y1, cell_w, cell_h)
+
         # Met à jour l'étape, la progression et la vitesse
         self.status.configure(text=f"STEP {self.step:02d} / {self.total}")
         self.progress.delete("all")
@@ -322,6 +351,29 @@ class _TourPlayer:
         )
         self.speed_label.configure(text=f"SPEED {self.delay_ms} ms")
         self.buttons["pause"].configure(text="RESUME" if not self.running else "PAUSE")
+
+    def _draw_coordinates(self, offset_x: int, offset_y: int,
+                          x0: int, y0: int, x1: int, y1: int,
+                          cell_w: float, cell_h: float) -> None:
+        """Dessine les numéros 1-8 sur les quatre côtés du plateau."""
+        font = ("TkFixedFont", 11, "bold")
+        # Position absolue de la grille dans le canvas
+        gx0, gy0 = offset_x + x0, offset_y + y0
+        gx1, gy1 = offset_x + x1, offset_y + y1
+        for i in range(8):
+            # Centre de la case i
+            cx = gx0 + (i + 0.5) * cell_w
+            cy = gy0 + (i + 0.5) * cell_h
+            # Colonnes : en haut et en bas
+            self.canvas.create_text(cx, gy0 - 14, text=str(i + 1), font=font,
+                                    fill=PALETTE["berry"])
+            self.canvas.create_text(cx, gy1 + 14, text=str(i + 1), font=font,
+                                    fill=PALETTE["berry"])
+            # Lignes : à gauche et à droite
+            self.canvas.create_text(gx0 - 14, cy, text=str(i + 1), font=font,
+                                    fill=PALETTE["berry"])
+            self.canvas.create_text(gx1 + 14, cy, text=str(i + 1), font=font,
+                                    fill=PALETTE["berry"])
 
     def _schedule_next(self) -> None:
         # Planifie la case suivante si la lecture est en cours
@@ -428,16 +480,141 @@ class _TourPlayer:
         self._render()
         return "break"
 
+    def toggle_history(self, _event: tk.Event | None = None) -> str:
+        """Affiche ou masque la courbe fitness / génération."""
+        # Si la fenêtre est déjà ouverte, on la ferme
+        if self.history_window is not None and self.history_window.winfo_exists():
+            self.history_window.destroy()
+            self.history_window = None
+            return "break"
+        # Sans historique, il n'y a rien à afficher
+        if not self.history:
+            return "break"
+
+        win = tk.Toplevel(self.root)
+        win.title("Historique des générations")
+        win.configure(bg=PALETTE["frame"])
+        self.history_window = win
+
+        canvas = tk.Canvas(win, width=680, height=400, bg=PALETTE["light"],
+                           highlightthickness=0)
+        canvas.pack(padx=12, pady=12)
+
+        # Zone de tracé réservée aux axes
+        left, top, right, bottom = 56, 40, 660, 348
+        gens = [g for g, _ in self.history]
+        fits = [f for _, f in self.history]
+        gmin, gmax = min(gens), max(gens)
+        if gmax == gmin:
+            gmax = gmin + 1
+        fmin, fmax = 0, 64
+
+        def px(g: float) -> float:
+            # Transforme une génération en position horizontale
+            return left + (g - gmin) / (gmax - gmin) * (right - left)
+
+        def py(f: float) -> float:
+            # Transforme une fitness en position verticale
+            return bottom - (f - fmin) / (fmax - fmin) * (bottom - top)
+
+        # Axes
+        canvas.create_line(left, top, left, bottom, fill=PALETTE["berry"], width=2)
+        canvas.create_line(left, bottom, right, bottom, fill=PALETTE["berry"], width=2)
+
+        # Graduations de la fitness
+        for f in (0, 16, 32, 48, 64):
+            y = py(f)
+            canvas.create_line(left, y, right, y, fill=PALETTE["pink"], dash=(2, 5))
+            canvas.create_text(left - 10, y, text=str(f), anchor="e",
+                               font=("TkFixedFont", 9), fill=PALETTE["berry"])
+
+        # Graduations des générations
+        for g in sorted({gmin, (gmin + gmax) // 2, gmax}):
+            canvas.create_text(px(g), bottom + 14, text=str(g), anchor="n",
+                               font=("TkFixedFont", 9), fill=PALETTE["berry"])
+
+        # Courbe de la fitness en fonction de la génération
+        points: list[float] = []
+        for g, f in self.history:
+            points += [px(g), py(f)]
+        if len(points) >= 4:
+            canvas.create_line(*points, fill=PALETTE["berry"], width=2, smooth=True)
+
+        # Titres
+        canvas.create_text((left + right) / 2, 18,
+                           text=f"FITNESS / GENERATION   (solution : gen {self.generation})",
+                           font=("TkFixedFont", 10, "bold"), fill=PALETTE["berry"])
+        canvas.create_text((left + right) / 2, bottom + 36, text="generation",
+                           font=("TkFixedFont", 9), fill=PALETTE["berry"])
+        return "break"
+
+    def toggle_path(self, _event: tk.Event | None = None) -> str:
+        """Affiche ou masque la liste des déplacements de la solution."""
+        # Si la fenêtre est déjà ouverte, on la ferme
+        if self.path_window is not None and self.path_window.winfo_exists():
+            self.path_window.destroy()
+            self.path_window = None
+            return "break"
+
+        win = tk.Toplevel(self.root)
+        win.title("Chemin de la solution")
+        win.configure(bg=PALETTE["frame"])
+        self.path_window = win
+
+        # En-tête : génération, fitness et nombre de cases
+        entete = tk.Frame(win, bg=PALETTE["berry"], padx=10, pady=8)
+        entete.pack(fill="x")
+        generation = self.generation if self.generation is not None else "—"
+        tk.Label(
+            entete,
+            text=(f"GENERATION {generation}   ·   "
+                  f"FITNESS {self.total} / 64   ·   {self.total} CASES"),
+            bg=PALETTE["berry"], fg="white", font=("TkFixedFont", 10, "bold"),
+        ).pack()
+
+        # Zone défilable contenant la liste
+        zone = tk.Frame(win, bg=PALETTE["light"])
+        zone.pack(fill="both", expand=True, padx=10, pady=10)
+        texte = tk.Text(zone, width=46, height=28, bg=PALETTE["light"],
+                        fg=PALETTE["berry"], font=("TkFixedFont", 9),
+                        relief="flat", padx=10, pady=8)
+        barre = tk.Scrollbar(zone, command=texte.yview)
+        texte.configure(yscrollcommand=barre.set)
+        barre.pack(side="right", fill="y")
+        texte.pack(side="left", fill="both", expand=True)
+
+        # Entête du tableau
+        texte.insert("end", "  N°   case        déplacement\n")
+        texte.insert("end", "  " + "-" * 38 + "\n")
+
+        # Une ligne par case visitée, avec le déplacement pris
+        for i, (row, col) in enumerate(self.path):
+            if i == 0:
+                detail = "départ"
+            else:
+                precedent = self.path[i - 1]
+                dx = row - precedent[0]
+                dy = col - precedent[1]
+                numero = DIRECTION_NUM.get((dx, dy))
+                detail = DIRECTION_NOMS.get(numero, "?")
+            texte.insert("end", f"  {i + 1:3d}.  ({row}, {col})     {detail}\n")
+
+        # Lecture seule
+        texte.configure(state="disabled")
+        return "break"
+
     def close(self) -> None:
         # Ferme la fenêtre
         self._cancel_callbacks()
         self.root.destroy()
 
 
-def draw_solution(best_knight, generation: int | None = None) -> None:
+def draw_solution(best_knight, generation: int | None = None,
+                  history: list[tuple[int, int]] | None = None) -> None:
     """Affiche et anime le parcours du meilleur cavalier.
 
     `generation` est la génération qui a produit le parcours.
+    `history` est la liste des couples (génération, fitness) pour la courbe.
     """
     # Vérifie que l'image du plateau existe
     if not BOARD_PATH.is_file():
@@ -446,5 +623,5 @@ def draw_solution(best_knight, generation: int | None = None) -> None:
     _ensure_knight_sprite()
     # Crée la fenêtre et lance l'animation
     root = tk.Tk()
-    _TourPlayer(root, best_knight.path, generation)
+    _TourPlayer(root, best_knight.path, generation, history)
     root.mainloop()
