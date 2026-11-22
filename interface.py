@@ -265,6 +265,19 @@ class _TourPlayer:
             right = round(x0 + (col + 1) * cell_w)
             bottom = round(y0 + (row + 1) * cell_h)
             tint_draw.rectangle((left, top, right - 1, bottom - 1), fill=color)
+
+        # Dessine la ligne qui relie les cases visitées dans l'ordre
+        if self.step > 1:
+            points = []
+            for row, col in self.path[:self.step]:
+                # Centre de chaque case visitée
+                points.append((x0 + (col + 0.5) * cell_w,
+                               y0 + (row + 0.5) * cell_h))
+            # Trait semi-transparent, tracé dans le calque de colorisation
+            # pour se mélanger correctement au plateau
+            tint_draw.line(points, fill=(168, 50, 110, 150),
+                           width=max(2, round(cell_w * 0.12)), joint="curve")
+
         scaled = Image.alpha_composite(scaled, tint)
 
         # Dessine le numéro de chaque case visitée

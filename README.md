@@ -54,6 +54,14 @@ sprite scaling use nearest-neighbor resampling to preserve crisp pixels.
 Coordinates `1–8` are drawn on all four sides of the board, as in Figure 2 of
 the assignment.
 
+## Path line
+
+A semi-transparent berry line joins the centre of every visited square in
+order, so the knight's route reads at a glance. It is drawn in the tint layer
+*before* the numbers, which keeps it blended with the board art and always
+under the move numbers. The line grows with playback: at `Step 1` there is
+nothing to draw, and it is complete when all 64 squares are reached.
+
 ## Generation display
 
 The header also reports **`GEN n`** — the generation in which the genetic
@@ -98,7 +106,10 @@ When a tour is found, `export.py::export_solution()` writes two files next to
 PYTHONPATH=. python tools/_verif_spec.py        # 51 checks against the assignment
 PYTHONPATH=. python tools/_verif_nouveautes.py  # coordinates, history, export
 PYTHONPATH=. python tools/_verif_chemin.py      # solution path window
+PYTHONPATH=. python tools/_verif_ligne.py       # path line on the board
 ```
+
+106 checks in total, all passing.
 
 All comments and docstrings in the source are written in simple French, and
 the method signatures match the assignment exactly
